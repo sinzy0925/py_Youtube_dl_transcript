@@ -1,0 +1,6 @@
+yt-dlp[default]>=2026.8.19
+yt-dlp-ejs>=0.8.0
+google-genai>=2.23.0
+python-dotenv>=1.0
+pydantic>=2.0
+# 別途必要: ffmpeg, Deno (winget install DenoLand.Deno) ... yt-dlp の YouTube チャレンジ解決に必須

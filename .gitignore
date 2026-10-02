@@ -1,0 +1,10 @@
+.env
+cookies.txt
+output/
+__pycache__/
+.venv/
+*.mp3
+*.mp4
+*.webm
+*.m4a
+*.wav
