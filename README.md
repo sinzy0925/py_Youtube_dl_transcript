@@ -128,4 +128,4 @@ yt_transcript/
 
 ## ライセンス
 
-リポジトリに LICENSE がない場合は、利用・再配布前に作者に確認してください。
+[MIT License](LICENSE) — Copyright (c) 2026 sinzy0925
