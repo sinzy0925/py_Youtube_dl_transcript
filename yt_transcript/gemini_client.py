@@ -33,7 +33,7 @@ def load_api_keys() -> list[str]:
 
 
 class RotatingGemini:
-    """クォータ超過(429)等が出たら次の API キーに切り替えて再試行する薄いラッパー。"""
+    """Gemini API クライアント。呼び出しごとにキーをローテーションし、429 等では次キーで再試行。"""
 
     def __init__(self, keys: list[str] | None = None, max_retries_per_key: int = 2):
         self.keys = keys or load_api_keys()
@@ -53,13 +53,17 @@ class RotatingGemini:
         log.warning("API キーを #%d に切り替え", self.idx + 1)
 
     def call(self, fn: Callable[[genai.Client], T]) -> T:
-        """fn(client) を実行。429/503/403(クォータ)なら全キーを順に試す。"""
+        """fn(client) を実行。成功するたびに次のキーへ。429/503/クォータ系は次キーで再試行。"""
         attempts = 0
         total = len(self.keys) * self.max_retries_per_key
         last_err: Exception | None = None
         while attempts < total:
+            key_num = self.idx + 1
             try:
-                return fn(self.client)
+                result = fn(self.client)
+                log.debug("API キー #%d で成功 → 次回は別キー", key_num)
+                self._rotate()
+                return result
             except errors.APIError as e:  # type: ignore[attr-defined]
                 last_err = e
                 code = getattr(e, "code", None)
@@ -68,7 +72,13 @@ class RotatingGemini:
                 if not quota_like:
                     raise
                 attempts += 1
-                log.warning("API エラー(code=%s)。キー #%d → ローテーション (%d/%d)", code, self.idx + 1, attempts, total)
+                log.warning(
+                    "API エラー(code=%s)。キー #%d → 次キーで再試行 (%d/%d)",
+                    code,
+                    key_num,
+                    attempts,
+                    total,
+                )
                 self._rotate()
                 time.sleep(min(2 * attempts, 15))
         raise RuntimeError(f"全 API キーで失敗しました: {last_err}")
