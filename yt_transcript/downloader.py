@@ -80,10 +80,16 @@ def _browser_cookie_tuple(spec: str) -> tuple[str, ...]:
 def youtube_cookie_names(path: Path) -> set[str]:
     names: set[str] = set()
     for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
-        if not line or line.startswith("#"):
+        if not line.strip():
+            continue
+        # Netscape ヘッダコメントは除外。#HttpOnly_ 行は Cookie 本体。
+        if line.startswith("#") and not line.startswith("#HttpOnly_"):
             continue
         parts = line.split("\t")
-        if len(parts) >= 6 and parts[0].endswith("youtube.com"):
+        domain = parts[0]
+        if domain.startswith("#HttpOnly_"):
+            domain = domain[len("#HttpOnly_") :]
+        if len(parts) >= 6 and domain.endswith("youtube.com"):
             names.add(parts[5])
     return names
 

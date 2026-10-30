@@ -89,7 +89,10 @@ python main.py "URL" --cookies-from-browser "chrome:Profile 1"
 2024 年以降、YouTube は Cookie なし／不十分な Cookie だと `Sign in to confirm you're not a bot` で失敗することが多いです。
 
 1. Chrome / Edge で **YouTube にログイン**したタブを開く  
-2. 拡張 **「Get cookies.txt LOCALLY」** でエクスポート（Netscape 形式）  
+2. 次のいずれかで Netscape 形式の `cookies.txt` を用意する  
+   - **CDP Chrome 起動中**（`scripts/launch_chrome_cdp.py`）:  
+     `python scripts/export_cookies_cdp.py`（mp4 共有: `--shared-mp4`）  
+   - 拡張 **「Get cookies.txt LOCALLY」** でエクスポート  
 3. `.youtube.com` 行に **`LOGIN_INFO`**（または `SID` / `__Secure-1PSID`）があることを確認  
 4. `cookies.txt` を本リポ直下、または `../py_youtube_dl_mp4/cookies.txt` に保存  
 
