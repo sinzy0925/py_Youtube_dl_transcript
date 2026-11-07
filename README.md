@@ -43,7 +43,30 @@ GOOGLE_API_KEY_2=別のキー（任意・クォータ用）
 
 ## 使い方
 
-### 基本
+### 基本（Windows 推奨: Cookie 自動更新付き）
+
+```powershell
+.\main.ps1 "https://www.youtube.com/watch?v=VIDEO_ID"
+```
+
+`main.ps1` は実行のたびに次を行い、**YouTube の bot 判定（Cookie 不足）を自動で回避しやすく**します。
+
+1. **`scripts/launch_chrome_cdp.py`** … 専用プロファイルで Chrome を CDP モード起動し、指定 URL（YouTube）を表示  
+2. **YouTube タブが CDP 上に現れるまで待機**  
+3. **`scripts/export_cookies_cdp.py`** … 起動中の Chrome から Netscape 形式の `cookies.txt` を書き出し  
+4. **`main.py`** … `--cookies cookies.txt` 付きで従来どおり文字起こしパイプラインを実行  
+
+Chrome を**閉じたり**拡張で手動エクスポートしたりする必要はありません（初回ログインは下記「初回セットアップ」参照）。
+
+```powershell
+# CDP 更新をスキップ（既に cookies.txt がある場合など）
+.\main.ps1 -SkipCookieRefresh "https://youtu.be/VIDEO_ID"
+
+# --cookies / --cookies-from-browser を付けた場合も CDP 更新は行わない
+.\main.ps1 "URL" --cookies cookies.txt
+```
+
+### 基本（Python のみ）
 
 ```powershell
 python main.py "https://www.youtube.com/watch?v=VIDEO_ID"
@@ -54,6 +77,8 @@ python main.py "https://www.youtube.com/watch?v=VIDEO_ID"
 1. カレントディレクトリの `cookies.txt`
 2. 本リポジトリ直下の `cookies.txt`
 3. 兄弟プロジェクト **`../py_youtube_dl_mp4/cookies.txt`**（MP4 ダウンローダーと同じファイルを共有可能）
+
+`main.ps1` を使わない場合は、事前に `cookies.txt` を用意するか、下記「手動で Cookie を用意する」を参照してください。
 
 ### よく使うオプション
 
@@ -84,19 +109,49 @@ python main.py "URL" --cookies-from-browser "chrome:Profile 1"
 
 **注意:** `--cookies` と `--cookies-from-browser` は **同時に指定できません**。
 
-### YouTube Cookie（bot 判定）について
+### YouTube Cookie（bot 判定）の問題と解決策
 
-2024 年以降、YouTube は Cookie なし／不十分な Cookie だと `Sign in to confirm you're not a bot` で失敗することが多いです。
+#### 背景
+
+2024 年以降、YouTube は Cookie なし／不十分な Cookie だと **`Sign in to confirm you're not a bot`** で yt-dlp が失敗することが多いです。ログイン済みセッション（`LOGIN_INFO` や `__Secure-1PSID` など）を yt-dlp に渡す必要があります。
+
+従来よく使う **`--cookies-from-browser`** は、Chrome / Edge **起動中は Cookie データベースがロック**され読み込めず失敗しがちです。拡張機能で `cookies.txt` を毎回手動エクスポートする方法も手間がかかります。
+
+#### 本リポジトリでの解決（CDP 経由・推奨）
+
+**Chrome DevTools Protocol（CDP）** で起動した Chrome から、**ブラウザを閉じずに** Cookie を取得します。
+
+| 手段 | 説明 |
+|------|------|
+| **`main.ps1`** | 上記「基本（Windows 推奨）」のとおり、起動 → 待機 → エクスポート → `main.py` を一括実行 |
+| **`launch_chrome_cdp.py` + `export_cookies_cdp.py`** | 手動・自動化の部品。mp4 プロジェクトと共有する場合は `--shared-mp4` |
+
+CDP 用 Chrome は兄弟プロジェクト **`../py_jobutore-kaijoken/.chrome-cdp-profile`**（既定プロファイル `Default`）を使います。`launch_chrome_cdp.py` と同じ設定です。
+
+```powershell
+# 部品だけ使う例
+python scripts/launch_chrome_cdp.py --url "https://www.youtube.com/"
+python scripts/export_cookies_cdp.py
+python scripts/export_cookies_cdp.py --shared-mp4   # ../py_youtube_dl_mp4/cookies.txt
+```
+
+環境変数（任意）: `CDP_ENDPOINT`（既定 `http://127.0.0.1:9222`）、`CDP_USER_DATA_DIR`、`CHROME_PATH`
+
+#### 初回セットアップ（CDP プロファイル）
+
+**一度だけ**、CDP で起動した Chrome で [YouTube](https://www.youtube.com/) に **Google アカウントでログイン**してください。以降は `main.ps1` 実行時に Cookie が自動更新されます。
+
+エクスポート後、`cookies.txt` に **`LOGIN_INFO`**（または `SID` / `__Secure-1PSID`）が含まれることを確認します（`export_cookies_cdp.py` が警告を出す場合は未ログインの可能性があります）。
+
+#### 手動で Cookie を用意する（代替）
 
 1. Chrome / Edge で **YouTube にログイン**したタブを開く  
-2. 次のいずれかで Netscape 形式の `cookies.txt` を用意する  
-   - **CDP Chrome 起動中**（`scripts/launch_chrome_cdp.py`）:  
-     `python scripts/export_cookies_cdp.py`（mp4 共有: `--shared-mp4`）  
-   - 拡張 **「Get cookies.txt LOCALLY」** でエクスポート  
-3. `.youtube.com` 行に **`LOGIN_INFO`**（または `SID` / `__Secure-1PSID`）があることを確認  
-4. `cookies.txt` を本リポ直下、または `../py_youtube_dl_mp4/cookies.txt` に保存  
+2. 拡張 **「Get cookies.txt LOCALLY」** などで Netscape 形式をエクスポート  
+3. 本リポ直下の `cookies.txt` または `../py_youtube_dl_mp4/cookies.txt` に保存  
 
-ファイルで失敗した場合、ツールは **別の cookies.txt → Edge → Chrome** の順で自動リトライします。ブラウザから読むときは **対象ブラウザをすべて終了**してください（起動中は Cookie DB がロックされます）。
+#### `main.py` 単体・フォールバック
+
+`cookies.txt` で失敗した場合、`main.py` / `downloader.py` は **別の cookies.txt → Edge → Chrome** の順で自動リトライします。`--cookies-from-browser` を使うときだけ **対象ブラウザをすべて終了**してください。
 
 環境変数 `YT_COOKIES_BROWSER`（例: `edge,chrome`）で、自動リトライするブラウザの順序を変更できます。
 
@@ -124,7 +179,11 @@ output/
 ## プロジェクト構成
 
 ```
+main.ps1                # Windows ラッパー（CDP Cookie 更新 + main.py）
 main.py                 # CLI エントリポイント
+scripts/
+  launch_chrome_cdp.py  # CDP モードで Chrome 起動
+  export_cookies_cdp.py # CDP から cookies.txt を書き出し
 yt_transcript/
   downloader.py         # yt-dlp（音声・字幕・Cookie 認証）
   audio.py              # ffmpeg（モノラル・分割）
@@ -140,9 +199,11 @@ yt_transcript/
 
 | 症状 | 対処 |
 |------|------|
-| `Sign in to confirm you're not a bot` | ログイン済み YouTube から `cookies.txt` を再エクスポート（`LOGIN_INFO` を確認）。またはブラウザ終了後 `--cookies-from-browser edge` |
-| `Cookie 読み込みエラー` / `Could not copy Chrome cookie database` | Chrome / Edge を完全終了して再実行。または `cookies.txt` を使う |
-| `cookies.txt に YouTube ログイン Cookie がありません`（警告） | YouTube タブから再エクスポート。mp4 プロジェクト側の `cookies.txt` を更新して共有してもよい |
+| `Sign in to confirm you're not a bot` | **`.\main.ps1 "URL"`** で CDP から Cookie を更新。または CDP Chrome で YouTube にログイン後 `export_cookies_cdp.py` |
+| `Cookie 読み込みエラー` / `Could not copy Chrome cookie database` | **`--cookies-from-browser` 使用時**は Chrome / Edge を完全終了。通常は **`main.ps1` または `cookies.txt`** を使う |
+| `cookies.txt に YouTube ログイン Cookie がありません`（警告） | CDP プロファイルで YouTube にログインしてから `main.ps1` または `export_cookies_cdp.py` を再実行 |
+| CDP に接続できない | `python scripts/launch_chrome_cdp.py` で起動。ポート 9222 が他プロセスと競合していないか確認 |
+| `main.ps1` が毎回 Chrome を終了する | `launch_chrome_cdp.py` は同ポートの既存 CDP を置き換える仕様。`-SkipCookieRefresh` で Cookie 更新のみスキップ可能 |
 | YouTube で「再読み込みが必要」等 | Deno をインストールし、ターミナルを再起動 |
 | `GOOGLE_API_KEY_1〜10 が見つかりません` | `.env` のキー名・配置場所を確認 |
 | 429 / クォータ超過 | `.env` に複数キーを追加（呼び出しごとに分散、429 時は次キーで再試行） |
